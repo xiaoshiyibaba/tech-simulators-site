@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宏观货币信用传导模拟器</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6;
+            color: #2c3e50;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        }
+        h1 {
+            text-align: center;
+            font-size: 28px;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+        .controls {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+            margin-bottom: 30px;
+        }
+        .slider-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .slider-group:last-child { margin-bottom: 0; }
+        .slider-label {
+            width: 260px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .slider-desc {
+            font-size: 12px;
+            color: #7f8c8d;
+            display: block;
+            margin-top: 4px;
+        }
+        input[type=range] {
+            flex-grow: 1;
+            margin: 0 20px;
+            cursor: pointer;
+        }
+        .value-display {
+            width: 50px;
+            font-weight: bold;
+            font-size: 18px;
+            color: #2980b9;
+            text-align: right;
+        }
+        .simulation-view {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            height: 250px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #ebf5fb;
+            border-radius: 10px;
+            position: relative;
+        }
+        .tank-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 25%;
+            height: 100%;
+            justify-content: flex-end;
+            position: relative;
+        }
+        .tank-label {
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 16px;
+        }
+        .tank {
+            width: 80px;
+            height: 180px;
+            border: 3px solid #bdc3c7;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            position: relative;
+            background: #fff;
+            overflow: hidden;
+        }
+        .water {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: linear-gradient(to top, #3498db, #5dade2);
+            transition: height 0.4s ease-out;
+            border-radius: 0 0 7px 7px;
+        }
+        .water-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            bottom: 10px;
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .pipe {
+            flex-grow: 1;
+            height: 20px;
+            background: #bdc3c7;
+            position: relative;
+            margin-bottom: 40px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .flow {
+            height: 100%;
+            background: #3498db;
+            transition: width 0.4s ease-out, opacity 0.4s;
+        }
+        .status-board {
+            display: flex;
+            gap: 20px;
+        }
+        .panel {
+            flex: 1;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .macro-panel { background: #e8f8f5; border: 1px solid #a3e4d7; }
+        .asset-panel { background: #fef9e7; border: 1px solid #f9e79f; }
+        .panel h3 { margin-top: 0; margin-bottom: 15px; font-size: 18px; color: #2c3e50;}
+        .status-badge {
+            font-size: 24px;
+            font-weight: bold;
+            padding: 10px 20px;
+            border-radius: 8px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        .status-desc { font-size: 15px; color: #555; line-height: 1.5; }
+        .asset-item { font-size: 18px; font-weight: bold; margin: 8px 0; }
+        .bull { color: #c0392b; }
+        .bear { color: #27ae60; }
+        .neutral { color: #7f8c8d; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🌊 宏观货币信用传导模拟器</h1>
+
+    <div class="controls">
+        <div class="slider-group">
+            <div class="slider-label">
+                1. 央行基础货币投放<br>
+                <span class="slider-desc">控制"宽货币"力度 (降准/MLF等)</span>
+            </div>
+            <input type="range" id="pboc-supply" min="0" max="100" value="50">
+            <div class="value-display" id="val-pboc">50</div>
+        </div>
+        <div class="slider-group">
+            <div class="slider-label">
+                2. 商业银行放贷意愿<br>
+                <span class="slider-desc">取决于银行风险偏好与资产质量</span>
+            </div>
+            <input type="range" id="bank-willingness" min="0" max="100" value="50">
+            <div class="value-display" id="val-bank">50</div>
+        </div>
+        <div class="slider-group">
+            <div class="slider-label">
+                3. 实体经济借款需求<br>
+                <span class="slider-desc">取决于企业盈利预期与居民购房意愿</span>
+            </div>
+            <input type="range" id="econ-demand" min="0" max="100" value="50">
+            <div class="value-display" id="val-econ">50</div>
+        </div>
+    </div>
+
+    <div class="simulation-view">
+        <div class="tank-container">
+            <div class="tank-label">央行 (水库源头)</div>
+            <div class="tank" style="border-top: 3px solid #bdc3c7;">
+                <div class="water" style="height: 100%; background: #95a5a6;"></div>
+                <div class="water-text">无限火力</div>
+            </div>
+        </div>
+
+        <div class="pipe">
+            <div class="flow" id="flow-1"></div>
+        </div>
+
+        <div class="tank-container">
+            <div class="tank-label">银行间市场<br><span style="font-size:12px;font-weight:normal;">(DR007流动性)</span></div>
+            <div class="tank">
+                <div class="water" id="water-interbank"></div>
+                <div class="water-text" id="text-interbank">水位</div>
+            </div>
+        </div>
+
+        <div class="pipe" style="position: relative;">
+            <div style="position:absolute; top:-25px; width:100%; text-align:center; font-size:12px; color:#c0392b; font-weight:bold;" id="bottleneck-text"></div>
+            <div class="flow" id="flow-2"></div>
+        </div>
+
+        <div class="tank-container">
+            <div class="tank-label">实体经济<br><span style="font-size:12px;font-weight:normal;">(社融/投资/消费)</span></div>
+            <div class="tank">
+                <div class="water" id="water-econ"></div>
+                <div class="water-text" id="text-econ">水量</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-board">
+        <div class="panel macro-panel">
+            <h3>📊 当前宏观周期位置</h3>
+            <div class="status-badge" id="macro-state-badge" style="background: #a3e4d7; color: #0e6251;">稳货币 + 稳信用</div>
+            <div class="status-desc" id="macro-desc">
+                供需平衡，经济平稳运行，等待新的周期催化剂。
+            </div>
+        </div>
+        <div class="panel asset-panel">
+            <h3>📈 大类资产配置逻辑</h3>
+            <div class="asset-item" id="asset-stock">股市：<span class="neutral">结构性震荡</span></div>
+            <div class="asset-item" id="asset-bond">债市：<span class="neutral">票息策略</span></div>
+            <div class="asset-item" id="asset-comm">商品：<span class="neutral">观望基本面</span></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const pbocSlider = document.getElementById('pboc-supply');
+    const bankSlider = document.getElementById('bank-willingness');
+    const econSlider = document.getElementById('econ-demand');
+
+    const pbocVal = document.getElementById('val-pboc');
+    const bankVal = document.getElementById('val-bank');
+    const econVal = document.getElementById('val-econ');
+
+    const waterInterbank = document.getElementById('water-interbank');
+    const waterEcon = document.getElementById('water-econ');
+    const flow1 = document.getElementById('flow-1');
+    const flow2 = document.getElementById('flow-2');
+    const bottleneckText = document.getElementById('bottleneck-text');
+
+    const macroBadge = document.getElementById('macro-state-badge');
+    const macroDesc = document.getElementById('macro-desc');
+    const assetStock = document.getElementById('asset-stock');
+    const assetBond = document.getElementById('asset-bond');
+    const assetComm = document.getElementById('asset-comm');
+
+    function updateSimulation() {
+        let pboc = parseInt(pbocSlider.value);
+        let bank = parseInt(bankSlider.value);
+        let econ = parseInt(econSlider.value);
+
+        pbocVal.innerText = pboc;
+        bankVal.innerText = bank;
+        econVal.innerText = econ;
+
+        let interbankLevel = pboc;
+        let creditLevel = Math.min(pboc, bank, econ);
+
+        waterInterbank.style.height = interbankLevel + '%';
+        document.getElementById('text-interbank').innerText = interbankLevel;
+        flow1.style.width = interbankLevel + '%';
+
+        waterEcon.style.height = creditLevel + '%';
+        document.getElementById('text-econ').innerText = creditLevel;
+        flow2.style.width = creditLevel + '%';
+
+        if (pboc > 50 && creditLevel < pboc) {
+            if (bank < econ) {
+                bottleneckText.innerText = '❌ 银行惜贷 (资产荒)';
+            } else if (econ < bank) {
+                bottleneckText.innerText = '❌ 实体拒贷 (需求弱)';
+            } else {
+                bottleneckText.innerText = '❌ 银行与实体双弱';
+            }
+        } else {
+            bottleneckText.innerText = '';
+        }
+
+        let moneyStatus = interbankLevel >= 60 ? '宽货币' : (interbankLevel <= 40 ? '紧货币' : '稳货币');
+        let creditStatus = creditLevel >= 60 ? '宽信用' : (creditLevel <= 40 ? '紧信用' : '稳信用');
+
+        if (moneyStatus === '稳货币' && creditStatus === '稳信用' && (pboc !== 50 || bank !== 50 || econ !== 50)) {
+           if(interbankLevel > 50) moneyStatus = '偏宽货币';
+           if(creditLevel > 50) creditStatus = '偏宽信用';
+        }
+
+        let stateString = moneyStatus + ' + ' + creditStatus;
+        macroBadge.innerText = stateString;
+
+        if (interbankLevel >= 60 && creditLevel <= 40) {
+            macroBadge.style.background = '#fadbd8'; macroBadge.style.color = '#7b241c';
+            macroDesc.innerText = "【资金空转 / 资产荒】央行在放水，但实体经济不接招，资金淤积在金融系统内部。";
+            assetStock.innerHTML = '股市：<span class="neutral">熊市尾声 / 拔估值</span>';
+            assetBond.innerHTML = '债市：<span class="bull">🔥 大牛市 (无脑买债)</span>';
+            assetComm.innerHTML = '商品：<span class="bear">🧊 熊市 (需求不振)</span>';
+        }
+        else if (interbankLevel >= 60 && creditLevel >= 60) {
+            macroBadge.style.background = '#fcf3cf'; macroBadge.style.color = '#9a7d0a';
+            macroDesc.innerText = "【经济扩张 / 戴维斯双击】传导顺畅，企业加杠杆扩产，基本面与流动性共振。";
+            assetStock.innerHTML = '股市：<span class="bull">🔥 全面大牛市</span>';
+            assetBond.innerHTML = '债市：<span class="bear">🧊 转熊 (资金脱虚向实)</span>';
+            assetComm.innerHTML = '商品：<span class="bull">🔥 周期牛市 (需求爆发)</span>';
+        }
+        else if (interbankLevel <= 40 && creditLevel >= 60) {
+            macroBadge.style.background = '#d6eaf8'; macroBadge.style.color = '#154360';
+            macroDesc.innerText = "【经济过热 / 央行踩刹车】实体经济惯性依然很强，但央行开始收紧流动性防通胀/防泡沫。";
+            assetStock.innerHTML = '股市：<span class="bear">🧊 赶顶转跌 (杀估值)</span>';
+            assetBond.innerHTML = '债市：<span class="bear">🧊 大熊市 (利率飙升)</span>';
+            assetComm.innerHTML = '商品：<span class="bull">🔥 最后的狂欢</span>';
+        }
+        else if (interbankLevel <= 40 && creditLevel <= 40) {
+            macroBadge.style.background = '#e8daef'; macroBadge.style.color = '#512e5f';
+            macroDesc.innerText = "【去杠杆 / 衰退底】央行收水，实体去杠杆，全社会流动性枯竭。";
+            assetStock.innerHTML = '股市：<span class="bear">🧊 大熊市 (杀业绩)</span>';
+            assetBond.innerHTML = '债市：<span class="neutral">震荡分化 (防违约)</span>';
+            assetComm.innerHTML = '商品：<span class="bear">🧊 暴跌</span>';
+        }
+        else {
+            macroBadge.style.background = '#d5f5e3'; macroBadge.style.color = '#145a32';
+            macroDesc.innerText = "【中性震荡】流动性与基本面处于平衡态，市场缺乏明确的主线宏观逻辑。";
+            assetStock.innerHTML = '股市：<span class="neutral">结构性行情 / 题材炒作</span>';
+            assetBond.innerHTML = '债市：<span class="neutral">震荡市 / 赚票息</span>';
+            assetComm.innerHTML = '商品：<span class="neutral">窄幅震荡</span>';
+        }
+    }
+
+    pbocSlider.addEventListener('input', updateSimulation);
+    bankSlider.addEventListener('input', updateSimulation);
+    econSlider.addEventListener('input', updateSimulation);
+
+    updateSimulation();
+</script>
+
+</body>
+</html>
