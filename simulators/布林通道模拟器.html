@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>布林通道动力学模拟器</title>
+ <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+ <style>
+ body {
+ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+ background-color: #f0f4f8;
+ color: #2d3748;
+ margin: 0;
+ padding: 20px;
+ }
+ .container {
+ max-width: 1100px;
+ margin: 0 auto;
+ background: #fff;
+ padding: 30px;
+ border-radius: 16px;
+ box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+ }
+ h1 { font-size: 26px; text-align: center; color: #1a202c; margin-bottom: 30px; }
+ .controls {
+ display: grid;
+ grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+ gap: 25px;
+ margin-bottom: 30px;
+ padding: 20px;
+ background: #f8fafc;
+ border-radius: 12px;
+ border: 1px solid #e2e8f0;
+ }
+ .control-group { display: flex; flex-direction: column; }
+ label { font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #4a5568; }
+ input[type="range"] { width: 100%; cursor: pointer; }
+ .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+ button {
+ flex: 1;
+ padding: 10px 14px;
+ border: 1px solid #cbd5e0;
+ border-radius: 8px;
+ background: #fff;
+ color: #4a5568;
+ cursor: pointer;
+ font-size: 13px;
+ transition: all 0.2s;
+ }
+ button:hover { background: #edf2f7; border-color: #a0aec0; }
+ button.active { background: #3182ce; color: white; border-color: #3182ce; box-shadow: 0 4px 6px rgba(49, 130, 206, 0.2); }
+ .chart-container { position: relative; height: 500px; margin-bottom: 25px; }
+ .analysis-panel {
+ font-size: 14px;
+ line-height: 1.7;
+ color: #4a5568;
+ padding: 20px;
+ border-radius: 10px;
+ background: #fdfdfd;
+ border: 1px dashed #cbd5e0;
+ }
+ .highlight { color: #3182ce; font-weight: bold; }
+ </style>
+</head>
+<body>
+
+<div class="container">
+ <h1>布林通道 (Bollinger Bands) 动力学沙盘</h1>
+
+ <div class="controls">
+ <div class="control-group">
+ <label>SMA 周期 (中轨): <span id="periodVal" class="highlight">20</span></label>
+ <input type="range" id="period" min="10" max="50" value="20">
+ </div>
+ <div class="control-group">
+ <label>标准差倍数 (宽度): <span id="stdDevVal" class="highlight">2.0</span></label>
+ <input type="range" id="stdDev" min="1" max="3" step="0.1" value="2">
+ </div>
+ <div class="control-group">
+ <label>模拟市场体制</label>
+ <div class="btn-group">
+ <button onclick="generateData('mean-reversion')" id="btn-mr">均值回归</button>
+ <button onclick="generateData('squeeze')" id="btn-sq">极度挤压</button>
+ <button onclick="generateData('trend')" id="btn-tr">趋势爆发</button>
+ </div>
+ </div>
+ </div>
+
+ <div class="chart-container">
+ <canvas id="bbChart"></canvas>
+ </div>
+
+ <div class="analysis-panel">
+ <strong>深度观察指引：</strong>
+ <ul>
+ <li><b>开口与收口：</b> 当上下轨距离剧烈缩小时（Squeeze），意味着波动率正在蓄能。可将"标准差倍数"调小，观察价格在窄幅通道中的压抑感。</li>
+ <li><b>贴轨运行 (Walking the Bands)：</b> 在趋势爆发模式下，观察价格如何持续推着上轨（或下轨）前进。此时均值回归策略失效，体现了市场的非遍历性。</li>
+ <li><b>置信区间：</b> 2倍标准差包含约 95% 的走势。若价格跃出填充区域，往往意味着极端情绪的爆发或基本面的重大转向。</li>
+ </ul>
+ </div>
+</div>
+
+<script>
+ let rawData = [];
+ let labels = []
+ const dataPoints = 120;
+ let bbChart;
+
+ function getBB(data, period, k) {
+ let middle = [];
+ let upper = [];
+ let lower = [];
+
+ for (let i = 0; i < data.length; i++) {
+ if (i < period - 1) {
+ middle.push(null);
+ upper.push(null);
+ lower.push(null);
+ continue;
+ }
+ let slice = data.slice(i - period + 1, i + 1);
+ let sum = slice.reduce((a, b) => a + b, 0);
+ let sma = sum / period;
+ let variance = slice.reduce((a, b) => a + Math.pow(b - sma, 2), 0) / period;
+ let std = Math.sqrt(variance);
+ middle.push(sma);
+ upper.push(sma + k * std);
+ lower.push(sma - k * std);
+ }
+ return { middle, upper, lower };
+ }
+
+ function generateData(type) {
+ rawData = [100];
+ labels = ["0"];
+ let currentPrice = 100;
+ let trend = 0;
+
+ for (let i = 1; i < dataPoints; i++) {
+ let change;
+ if (type === 'mean-reversion') {
+ let pull = (100 - currentPrice) * 0.1;
+ change = pull + (Math.random() - 0.5) * 6;
+ } else if (type === 'squeeze') {
+ change = (Math.random() - 0.5) * 1.5;
+ } else if (type === 'trend') {
+ trend += 0.05;
+ change = trend + (Math.random() - 0.3) * 5;
+ }
+ currentPrice += change;
+ rawData.push(currentPrice);
+ labels.push(i.toString());
+ }
+ updateChart();
+
+ ['mr', 'sq', 'tr'].forEach(id => document.getElementById('btn-'+id).classList.remove('active'));
+ const activeId = type === 'mean-reversion' ? 'mr' : (type === 'squeeze' ? 'sq' : 'tr');
+ document.getElementById('btn-'+activeId).classList.add('active');
+ }
+
+ function updateChart() {
+ const period = parseInt(document.getElementById('period').value);
+ const k = parseFloat(document.getElementById('stdDev').value);
+ document.getElementById('periodVal').innerText = period;
+ document.getElementById('stdDevVal').innerText = k.toFixed(1);
+
+ const bb = getBB(rawData, period, k);
+
+ if (bbChart) bbChart.destroy();
+
+ const ctx = document.getElementById('bbChart').getContext('2d');
+
+ // Upper band fill (from middle to upper)
+ const upperFillData = bb.middle.map((m, i) => m === null ? null : bb.upper[i]);
+ // Lower band fill (from lower to middle, reversed for proper fill)
+ const lowerFillData = bb.middle.map((m, i) => m === null ? null : bb.lower[i]);
+
+ bbChart = new Chart(ctx, {
+ type: 'line',
+ data: {
+ labels: labels,
+ datasets: [
+ {
+ label: '价格',
+ data: rawData,
+ borderColor: '#1a202c',
+ borderWidth: 2.5,
+ pointRadius: 0,
+ fill: false,
+ tension: 0.1,
+ order: 0
+ },
+ {
+ label: '上轨 (Upper)',
+ data: bb.upper,
+ borderColor: 'rgba(49, 130, 206, 0.9)',
+ borderWidth: 1.5,
+ borderDash: [],
+ pointRadius: 0,
+ fill: false,
+ order: 3
+ },
+ {
+ label: '中轨 (SMA)',
+ data: bb.middle,
+ borderColor: '#ed8936',
+ borderWidth: 2,
+ borderDash: [6, 4],
+ pointRadius: 0,
+ fill: false,
+ order: 2
+ },
+ {
+ label: '下轨 (Lower)',
+ data: bb.lower,
+ borderColor: 'rgba(49, 130, 206, 0.9)',
+ borderWidth: 1.5,
+ pointRadius: 0,
+ fill: '+1', // fill between this and previous dataset (middle)
+ backgroundColor: 'rgba(49, 130, 206, 0.08)',
+ order: 1,
+ tension: 0
+ },
+ {
+ label: '通道填充',
+ data: bb.upper,
+ borderColor: 'transparent',
+ backgroundColor: 'rgba(49, 130, 206, 0.06)',
+ borderWidth: 0,
+ pointRadius: 0,
+ fill: '-1', // fill between upper and lower
+ order: 4
+ }
+ ]
+ },
+ options: {
+ responsive: true,
+ maintainAspectRatio: false,
+ interaction: { intersect: false, mode: 'index' },
+ scales: {
+ y: {
+ grid: { color: '#f0f4f8' },
+ ticks: { color: '#718096' }
+ },
+ x: { display: false }
+ },
+ plugins: {
+ legend: {
+ position: 'top',
+ labels: {
+ boxWidth: 20,
+ font: { size: 12 },
+ filter: function(legendItem) {
+ return legendItem.text !== '通道填充';
+ }
+ }
+ },
+ tooltip: { filter: function(tooltipItem) { return tooltipItem.dataset.label !== '通道填充'; } }
+ }
+ }
+ });
+ }
+
+ document.getElementById('period').oninput = updateChart;
+ document.getElementById('stdDev').oninput = updateChart;
+
+ generateData('mean-reversion');
+</script>
+</body>
+</html>

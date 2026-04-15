@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>宏观经济周期全息沙盘</title>
+<style>
+:root {
+--bg-color: #f4f6f8;
+--panel-bg: #ffffff;
+--text-main: #2c3e50;
+--text-sub: #7f8c8d;
+--color-hot: #e74c3c;
+--color-cold: #3498db;
+--color-pot: #27ae60;
+--color-act: #f39c12;
+}
+body {
+font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+background-color: var(--bg-color);
+color: var(--text-main);
+margin: 0;
+padding: 20px;
+}
+.container {
+max-width: 900px;
+margin: 0 auto;
+display: flex;
+flex-direction: column;
+gap: 20px;
+}
+h1 {
+text-align: center;
+font-size: 26px;
+margin: 0 0 10px 0;
+}
+.panel {
+background: var(--panel-bg);
+border-radius: 12px;
+padding: 20px;
+box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+.panel-title {
+font-size: 18px;
+font-weight: bold;
+margin-bottom: 15px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+border-bottom: 2px solid #ecf0f1;
+padding-bottom: 10px;
+}
+.timeline-container {
+position: relative;
+padding: 20px 10px 10px 10px;
+}
+.phases-label {
+display: flex;
+justify-content: space-between;
+font-size: 14px;
+font-weight: bold;
+color: var(--text-sub);
+margin-bottom: 5px;
+padding: 0 5%;
+}
+.phases-label span { width: 25%; text-align: center; }
+input[type="range"] {
+width: 100%;
+cursor: pointer;
+height: 6px;
+background: #dfe6e9;
+border-radius: 5px;
+outline: none;
+-webkit-appearance: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+-webkit-appearance: none;
+width: 20px;
+height: 20px;
+border-radius: 50%;
+background: var(--text-main);
+cursor: pointer;
+box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+canvas {
+width: 100%;
+height: 200px;
+display: block;
+background: #fafbfc;
+border-radius: 8px;
+border: 1px solid #ecf0f1;
+}
+.legend {
+display: flex;
+justify-content: center;
+gap: 20px;
+margin-top: 10px;
+font-size: 13px;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; }
+.gauges {
+display: flex;
+flex-direction: column;
+gap: 15px;
+}
+.gauge-row {
+display: flex;
+align-items: center;
+}
+.gauge-label {
+width: 120px;
+font-weight: bold;
+font-size: 15px;
+}
+.gauge-track {
+flex-grow: 1;
+height: 24px;
+background: #ecf0f1;
+border-radius: 12px;
+position: relative;
+overflow: hidden;
+display: flex;
+align-items: center;
+}
+.gauge-fill {
+height: 100%;
+border-radius: 12px;
+transition: width 0.1s ease, background-color 0.3s ease;
+display: flex;
+align-items: center;
+justify-content: flex-end;
+padding-right: 10px;
+box-sizing: border-box;
+color: white;
+font-weight: bold;
+font-size: 12px;
+}
+.gauge-value-text {
+width: 60px;
+text-align: right;
+font-weight: bold;
+font-family: monospace;
+font-size: 16px;
+}
+.policy-board {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 20px;
+}
+.policy-card {
+background: #f8f9fa;
+border: 1px solid #e9ecef;
+padding: 15px;
+border-radius: 8px;
+}
+.policy-card h3 { margin: 0 0 10px 0; font-size: 16px; color: var(--text-main); }
+.tag {
+display: inline-block;
+padding: 5px 10px;
+border-radius: 4px;
+font-weight: bold;
+font-size: 18px;
+margin-bottom: 10px;
+}
+.desc { font-size: 14px; line-height: 1.6; color: #555; }
+</style>
+</head>
+<body>
+
+<div class="container">
+<h1>🌐 宏观经济周期全息沙盘</h1>
+
+<div class="panel timeline-container">
+<div class="phases-label">
+<span style="color: #d35400;">繁荣 (过热)</span>
+<span style="color: #8e44ad;">衰退 (降温)</span>
+<span style="color: #2980b9;">萧条 (冰点)</span>
+<span style="color: #27ae60;">复苏 (回暖)</span>
+</div>
+<input type="range" id="timeline" min="0" max="360" value="45">
+</div>
+
+<div class="panel">
+<div class="panel-title">
+1. 经济底层引擎：绝对规模与产出缺口
+<span id="phase-title" style="color: #e74c3c;">繁荣期</span>
+</div>
+<canvas id="engineCanvas" width="860" height="200"></canvas>
+<div class="legend">
+<div class="legend-item"><div class="dot" style="background: var(--color-pot);"></div>潜在GDP (生产能力)</div>
+<div class="legend-item"><div class="dot" style="background: var(--color-act);"></div>实际GDP (总需求)</div>
+<div class="legend-item"><div class="dot" style="background: rgba(231,76,60,0.5);"></div>正缺口 (通胀压力)</div>
+<div class="legend-item"><div class="dot" style="background: rgba(52,152,219,0.5);"></div>负缺口 (通缩压力)</div>
+</div>
+</div>
+
+<div class="panel">
+<div class="panel-title">2. 宏观表象：三大核心观测指标</div>
+<div class="gauges">
+<div class="gauge-row">
+<div class="gauge-label">GDP 增速</div>
+<div class="gauge-track">
+<div class="gauge-fill" id="bar-gdp"></div>
+</div>
+<div class="gauge-value-text" id="val-gdp">--</div>
+</div>
+<div class="gauge-row">
+<div class="gauge-label">CPI 通胀</div>
+<div class="gauge-track">
+<div class="gauge-fill" id="bar-cpi"></div>
+</div>
+<div class="gauge-value-text" id="val-cpi">--</div>
+</div>
+<div class="gauge-row">
+<div class="gauge-label">失业率</div>
+<div class="gauge-track">
+<div class="gauge-fill" id="bar-unemp"></div>
+</div>
+<div class="gauge-value-text" id="val-unemp">--</div>
+</div>
+</div>
+</div>
+
+<div class="panel policy-board">
+<div class="policy-card">
+<h3>🏛️ 央行与财政政策</h3>
+<div class="tag" id="policy-tag">紧货币 + 紧信用</div>
+<div class="desc" id="policy-desc">加载中...</div>
+</div>
+<div class="policy-card">
+<h3>📈 实体传导与资产表现</h3>
+<div class="tag" id="asset-tag" style="background: #ecf0f1; color: #2c3e50;">现金为王</div>
+<div class="desc" id="asset-desc">加载中...</div>
+</div>
+</div>
+</div>
+
+<script>
+const slider = document.getElementById('timeline');
+const canvas = document.getElementById('engineCanvas');
+const ctx = canvas.getContext('2d');
+
+function renderSandbox() {
+const theta = parseInt(slider.value);
+const rad = theta * Math.PI / 180;
+
+const width = canvas.width;
+const height = canvas.height;
+ctx.clearRect(0, 0, width, height);
+
+const startY = height * 0.85;
+const endY = height * 0.15;
+const amplitude = 45;
+
+// 绘制阴影缺口
+for (let i = 0; i < width; i++) {
+let t = (i / width) * 360;
+let r = t * Math.PI / 180;
+let potY = startY - (i / width) * (startY - endY);
+let actY = potY - Math.sin(r) * amplitude;
+
+ctx.beginPath();
+ctx.moveTo(i, potY);
+ctx.lineTo(i, actY);
+ctx.strokeStyle = actY < potY ? 'rgba(231, 76, 60, 0.25)' : 'rgba(52, 152, 219, 0.25)';
+ctx.stroke();
+}
+
+// 潜在GDP (直线)
+ctx.beginPath();
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 3;
+ctx.moveTo(0, startY);
+ctx.lineTo(width, endY);
+ctx.stroke();
+
+// 实际GDP (波浪)
+ctx.beginPath();
+ctx.strokeStyle = '#f39c12';
+ctx.lineWidth = 3;
+for (let i = 0; i < width; i++) {
+let t = (i / width) * 360;
+let r = t * Math.PI / 180;
+let potY = startY - (i / width) * (startY - endY);
+let actY = potY - Math.sin(r) * amplitude;
+if (i === 0) ctx.moveTo(i, actY);
+else ctx.lineTo(i, actY);
+}
+ctx.stroke();
+
+// 当前时间标记线
+let currentX = (theta / 360) * width;
+ctx.beginPath();
+ctx.strokeStyle = '#2c3e50';
+ctx.lineWidth = 2;
+ctx.setLineDash([5, 5]);
+ctx.moveTo(currentX, 0);
+ctx.lineTo(currentX, height);
+ctx.stroke();
+ctx.setLineDash([]);
+
+// 当前实际GDP点
+let currentPotY = startY - (currentX / width) * (startY - endY);
+let currentActY = currentPotY - Math.sin(rad) * amplitude;
+ctx.beginPath();
+ctx.arc(currentX, currentActY, 7, 0, Math.PI * 2);
+ctx.fillStyle = '#c0392b';
+ctx.fill();
+ctx.stroke();
+
+// 仪表盘
+let gdpVal = 50 + 50 * Math.cos(rad);
+let cpiVal = 50 + 50 * Math.sin(rad - Math.PI/4);
+let unempVal = 50 - 50 * Math.sin(rad);
+
+updateGauge('bar-gdp', 'val-gdp', gdpVal, false);
+updateGauge('bar-cpi', 'val-cpi', cpiVal, false);
+updateGauge('bar-unemp', 'val-unemp', unempVal, true);
+
+// 周期状态
+let phaseTitle = document.getElementById('phase-title');
+let polTag = document.getElementById('policy-tag');
+let polDesc = document.getElementById('policy-desc');
+let assTag = document.getElementById('asset-tag');
+let assDesc = document.getElementById('asset-desc');
+
+if (theta >= 0 && theta < 90) {
+phaseTitle.innerText = "🔥 繁荣期 (过热)";
+phaseTitle.style.color = "#d35400";
+polTag.innerText = "紧货币 + 紧信用";
+polTag.style.background = "#fadbd8"; polTag.style.color = "#7b241c";
+polDesc.innerText = "经济机器超负荷运转，通胀飙升。央行被迫踩刹车，连续加息、缩表，压制过热的总需求。";
+assTag.innerText = "现金为王 / 股债双杀";
+assDesc.innerText = "资金成本急剧上升，企业估值被杀，债券暴跌。大宗商品可能在上半场有最后疯狂。";
+}
+else if (theta >= 90 && theta < 180) {
+phaseTitle.innerText = "🍂 衰退期 (降温)";
+phaseTitle.style.color = "#8e44ad";
+polTag.innerText = "稳货币 + 紧信用";
+polTag.style.background = "#e8daef"; polTag.style.color = "#512e5f";
+polDesc.innerText = "紧缩政策见效，需求开始萎缩。央行停止加息进入观望，但银行因风险上升开始惜贷，信用收缩。";
+assTag.innerText = "债券牛市开启";
+assDesc.innerText = "经济基本面下行，资金从股市和商品撤出，涌入避险的国债市场。";
+}
+else if (theta >= 180 && theta < 270) {
+phaseTitle.innerText = "🧊 萧条期 (冰点)";
+phaseTitle.style.color = "#2980b9";
+polTag.innerText = "宽货币 + 紧信用";
+polTag.style.background = "#d6eaf8"; polTag.style.color = "#154360";
+polDesc.innerText = "出现通缩与大量失业。央行开启大放水（大幅降息降准），但由于陷入流动性陷阱，实体经济不敢借钱。";
+assTag.innerText = "债券大牛 / 股市磨底";
+assDesc.innerText = "资金淤积在银行间市场（资产荒），无脑买入债券。股市在绝望中寻找底部的支撑点。";
+}
+else {
+phaseTitle.innerText = "🌱 复苏期 (回暖)";
+phaseTitle.style.color = "#27ae60";
+polTag.innerText = "宽货币 + 宽信用";
+polTag.style.background = "#d5f5e3"; polTag.style.color = "#145a32";
+polDesc.innerText = "政策底传导至市场底。信贷通道重新打通，企业重新开始借钱扩张，产能利用率触底回升。";
+assTag.innerText = "股市大牛 / 周期爆发";
+assDesc.innerText = "流动性充裕叠加企业盈利改善（戴维斯双击），股市迎来主升浪，债券开始走熊。";
+}
+}
+
+function updateGauge(barId, valId, value, reverseColor) {
+const bar = document.getElementById(barId);
+const valText = document.getElementById(valId);
+
+let displayVal = Math.max(5, Math.min(95, value));
+bar.style.width = displayVal + '%';
+
+let visualNum = ((value - 50) / 10).toFixed(1);
+valText.innerText = (visualNum > 0 ? '+' : '') + visualNum + '%';
+valText.style.color = visualNum > 0 ? '#c0392b' : '#2980b9';
+
+let isHot = value > 50;
+if (reverseColor) isHot = !isHot;
+
+if (value > 80) bar.style.background = isHot ? '#e74c3c' : '#3498db';
+else if (value > 60) bar.style.background = isHot ? '#e67e22' : '#5dade2';
+else if (value > 40) bar.style.background = '#95a5a6';
+else if (value > 20) bar.style.background = !isHot ? '#e67e22' : '#5dade2';
+else bar.style.background = !isHot ? '#e74c3c' : '#3498db';
+}
+
+slider.addEventListener('input', renderSandbox);
+renderSandbox();
+</script>
+</body>
+</html>
