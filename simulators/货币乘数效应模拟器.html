@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>货币乘数效应模拟器</title>
+ <style>
+ :root {
+ --primary: #2563eb;
+ --reserve: #ef4444;
+ --loan: #10b981;
+ --bg: #f8fafc;
+ --surface: #ffffff;
+ --text: #1e293b;
+ }
+
+ body {
+ font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+ background-color: var(--bg);
+ color: var(--text);
+ margin: 0;
+ padding: 20px;
+ display: flex;
+ justify-content: center;
+ }
+
+ .container {
+ background-color: var(--surface);
+ max-width: 800px;
+ width: 100%;
+ border-radius: 12px;
+ box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+ padding: 30px;
+ }
+
+ h1 {
+ text-align: center;
+ font-size: 24px;
+ margin-top: 0;
+ color: var(--primary);
+ border-bottom: 2px solid #e2e8f0;
+ padding-bottom: 15px;
+ }
+
+ .controls {
+ display: flex;
+ gap: 20px;
+ margin-bottom: 25px;
+ flex-wrap: wrap;
+ }
+
+ .control-group {
+ flex: 1;
+ min-width: 250px;
+ background: #f1f5f9;
+ padding: 15px;
+ border-radius: 8px;
+ }
+
+ .control-group label {
+ display: block;
+ font-weight: bold;
+ margin-bottom: 10px;
+ }
+
+ input[type="range"] {
+ width: 100%;
+ margin-bottom: 10px;
+ }
+
+ .val-display {
+ text-align: right;
+ font-weight: bold;
+ color: var(--primary);
+ font-size: 1.1em;
+ }
+
+ .summary-panel {
+ display: flex;
+ justify-content: space-around;
+ background: #eff6ff;
+ border: 1px solid #bfdbfe;
+ padding: 15px;
+ border-radius: 8px;
+ margin-bottom: 30px;
+ text-align: center;
+ }
+
+ .summary-item .title {
+ font-size: 0.9em;
+ color: #475569;
+ }
+
+ .summary-item .value {
+ font-size: 1.5em;
+ font-weight: bold;
+ color: var(--primary);
+ }
+
+ .legend {
+ display: flex;
+ justify-content: center;
+ gap: 20px;
+ margin-bottom: 15px;
+ font-size: 0.9em;
+ }
+
+ .legend-item {
+ display: flex;
+ align-items: center;
+ gap: 5px;
+ }
+
+ .color-box {
+ width: 16px;
+ height: 16px;
+ border-radius: 4px;
+ }
+
+ .chart {
+ display: flex;
+ flex-direction: column;
+ gap: 10px;
+ }
+
+ .row {
+ display: flex;
+ align-items: center;
+ height: 30px;
+ font-size: 0.85em;
+ }
+
+ .round-label {
+ width: 60px;
+ font-weight: bold;
+ color: #64748b;
+ }
+
+ .bar-container {
+ flex: 1;
+ background-color: #e2e8f0;
+ height: 100%;
+ border-radius: 4px;
+ overflow: hidden;
+ display: flex;
+ }
+
+ .bar-reserve {
+ background-color: var(--reserve);
+ height: 100%;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ color: white;
+ transition: width 0.3s ease;
+ }
+
+ .bar-loan {
+ background-color: var(--loan);
+ height: 100%;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ color: white;
+ transition: width 0.3s ease;
+ }
+
+ .bar-text {
+ white-space: nowrap;
+ overflow: hidden;
+ padding: 0 4px;
+ }
+ </style>
+</head>
+<body>
+
+<div class="container">
+ <h1>货币乘数效应模拟器</h1>
+
+ <div class="controls">
+ <div class="control-group">
+ <label for="depositSlider">初始存款 / 基础货币 (元)</label>
+ <input type="range" id="depositSlider" min="100" max="10000" step="100" value="1000">
+ <div class="val-display" id="depositVal">1000</div>
+ </div>
+ <div class="control-group">
+ <label for="ratioSlider">法定准备金率 (RRR %)</label>
+ <input type="range" id="ratioSlider" min="1" max="100" step="1" value="10">
+ <div class="val-display" id="ratioVal">10%</div>
+ </div>
+ </div>
+
+ <div class="summary-panel">
+ <div class="summary-item">
+ <div class="title">理论货币乘数 (1 / RRR)</div>
+ <div class="value" id="multiplierVal">10.00</div>
+ </div>
+ <div class="summary-item">
+ <div class="title">派生广义货币总额极限 (元)</div>
+ <div class="value" id="totalMoneyVal">10000.00</div>
+ </div>
+ </div>
+
+ <div class="legend">
+ <div class="legend-item">
+ <div class="color-box" style="background-color: var(--reserve);"></div>
+ <span>留存准备金 (央行锁定)</span>
+ </div>
+ <div class="legend-item">
+ <div class="color-box" style="background-color: var(--loan);"></div>
+ <span>派生贷款 (注入实体经济)</span>
+ </div>
+ </div>
+
+ <div class="chart" id="chartArea"></div>
+</div>
+
+<script>
+ const depositSlider = document.getElementById('depositSlider');
+ const ratioSlider = document.getElementById('ratioSlider');
+ const depositVal = document.getElementById('depositVal');
+ const ratioVal = document.getElementById('ratioVal');
+ const multiplierVal = document.getElementById('multiplierVal');
+ const totalMoneyVal = document.getElementById('totalMoneyVal');
+ const chartArea = document.getElementById('chartArea');
+
+ function formatNumber(num) {
+ return Number(num).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 1});
+ }
+
+ function updateSimulation() {
+ const initialDeposit = parseFloat(depositSlider.value);
+ const rrr = parseFloat(ratioSlider.value) / 100;
+
+ depositVal.textContent = initialDeposit;
+ ratioVal.textContent = (rrr * 100).toFixed(0) + '%';
+
+ const multiplier = 1 / rrr;
+ const totalMoney = initialDeposit * multiplier;
+
+ multiplierVal.textContent = multiplier.toFixed(2);
+ totalMoneyVal.textContent = formatNumber(totalMoney);
+
+ chartArea.innerHTML = '';
+
+ let currentDeposit = initialDeposit;
+
+ for (let i = 1; i <= 10; i++) {
+ const requiredReserve = currentDeposit * rrr;
+ const newLoan = currentDeposit - requiredReserve;
+
+ const totalWidthPercent = (currentDeposit / initialDeposit) * 100;
+ const reservePercentOfTotal = (requiredReserve / currentDeposit) * 100;
+ const loanPercentOfTotal = (newLoan / currentDeposit) * 100;
+
+ const row = document.createElement('div');
+ row.className = 'row';
+
+ const label = document.createElement('div');
+ label.className = 'round-label';
+ label.textContent = `第 ${i} 轮`;
+
+ const barContainerWrapper = document.createElement('div');
+ barContainerWrapper.style.flex = "1";
+ barContainerWrapper.style.display = "flex";
+
+ const barContainer = document.createElement('div');
+ barContainer.className = 'bar-container';
+ barContainer.style.width = `${totalWidthPercent}%`;
+ if (totalWidthPercent < 0.5) barContainer.style.display = 'none';
+
+ const reserveBar = document.createElement('div');
+ reserveBar.className = 'bar-reserve';
+ reserveBar.style.width = `${reservePercentOfTotal}%`;
+ reserveBar.innerHTML = `<span class="bar-text">${formatNumber(requiredReserve)}</span>`;
+
+ const loanBar = document.createElement('div');
+ loanBar.className = 'bar-loan';
+ loanBar.style.width = `${loanPercentOfTotal}%`;
+ loanBar.innerHTML = `<span class="bar-text">${formatNumber(newLoan)}</span>`;
+
+ barContainer.appendChild(reserveBar);
+ barContainer.appendChild(loanBar);
+ barContainerWrapper.appendChild(barContainer);
+
+ row.appendChild(label);
+ row.appendChild(barContainerWrapper);
+
+ chartArea.appendChild(row);
+
+ currentDeposit = newLoan;
+ }
+ }
+
+ depositSlider.addEventListener('input', updateSimulation);
+ ratioSlider.addEventListener('input', updateSimulation);
+
+ updateSimulation();
+</script>
+
+</body>
+</html>
