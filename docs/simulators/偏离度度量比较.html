@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>偏离度度量比较：静态阈值与动态置信区间</title>
+ <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+ <style>
+ body {
+ font-family: "Times New Roman", SimSun, serif;
+ background-color: #ffffff;
+ color: #000000;
+ margin: 0;
+ padding: 30px;
+ }
+ .container {
+ max-width: 1000px;
+ margin: 0 auto;
+ border: 1px solid #cccccc;
+ padding: 40px;
+ box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+ }
+ h1 { font-size: 22px; text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 30px; }
+ .controls {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ margin-bottom: 25px;
+ padding: 15px;
+ background: #f9f9f9;
+ border: 1px solid #e0e0e0;
+ }
+ .control-group { display: flex; align-items: center; gap: 15px; flex: 1; }
+ label { font-size: 15px; font-weight: bold; }
+ input[type="range"] { width: 150px; cursor: pointer; }
+ .btn-group { display: flex; gap: 10px; }
+ button {
+ padding: 8px 16px;
+ border: 1px solid #999;
+ background: #fff;
+ color: #333;
+ cursor: pointer;
+ font-size: 14px;
+ font-family: "Times New Roman", SimSun, serif;
+ transition: background 0.2s;
+ }
+ button:hover { background: #eee; }
+ button.active { background: #333; color: #fff; font-weight: bold; border-color: #333; }
+ .chart-wrapper { margin-bottom: 30px; }
+ .chart-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; text-align: center; }
+ .chart-main { height: 350px; position: relative; border: 1px solid #eee; padding: 10px;}
+ .chart-sub { height: 200px; position: relative; border: 1px solid #eee; padding: 10px;}
+ .narrative-box {
+ padding: 20px;
+ background: #fdfdfd;
+ border: 1px solid #ddd;
+ font-size: 14.5px;
+ text-align: justify;
+ }
+ .math-text { font-family: "Times New Roman", serif; font-style: italic; }
+ </style>
+</head>
+<body>
+
+<div class="container">
+ <h1>图 1：价格偏离度量模型的实证对比（Bollinger Bands vs. BIAS）</h1>
+
+ <div class="controls">
+ <div class="control-group">
+ <label>均值回归参数 (<span class="math-text">N</span>): <span id="periodVal">20</span></label>
+ <input type="range" id="period" min="10" max="60" value="20">
+ </div>
+ <div class="btn-group">
+ <button onclick="generateData('stationary')" id="btn-stationary" class="active">平稳波动假设 (Stationary Regime)</button>
+ <button onclick="generateData('structural-break')" id="btn-break">结构性突变 (Structural Break)</button>
+ </div>
+ </div>
+
+ <div class="chart-wrapper">
+ <div class="chart-title">(a) 动态置信区间：带有 <span class="math-text">2σ</span> 边界的资产价格序列</div>
+ <div class="chart-main">
+ <canvas id="mainChart"></canvas>
+ </div>
+ </div>
+
+ <div class="chart-wrapper">
+ <div class="chart-title">(b) 静态偏离度量：受限于 ±10% 阈值的乖离率 (BIAS)</div>
+ <div class="chart-sub">
+ <canvas id="subChart"></canvas>
+ </div>
+ </div>
+
+ <div class="narrative-box" id="narrativeText"></div>
+</div>
+
+<script>
+ let rawData = [];
+ let labels = [];
+ const dataPoints = 160;
+ let mainChart, subChart;
+
+ const narratives = {
+ 'stationary': "<b>观测记录 1：高斯分布下的模型有效性</b><br>在平稳的时间序列中（假设价格服从具有恒定方差的随机游走），系统的波动率保持稳定。此时，面板 (b) 中的 BIAS 能够有效地将其值约束在预设的 ±10% 静态物理阈值内。这种状态支持了传统的一阶均值回归策略的有效性。",
+ 'structural-break': "<b>观测记录 2：非遍历性环境下的模型失效与动态自适应</b><br>当系统遭遇外部冲击导致结构性突变时，资产收益率呈现显著的肥尾特征（Fat-tailed distribution），方差剧烈扩大。此时观察面板 (b)，BIAS 会产生显著的溢出效应，静态阈值完全失效。相反，面板 (a) 中的 Bollinger Bands 能够通过实时计算滚动标准差（Rolling Standard Deviation），动态扩张其置信区间（Confidence Intervals），从而保持对极端观测值的统计学包容性。"
+ };
+
+ function generateData(mode) {
+ rawData = [100];
+ labels = ["0"];
+ let currentPrice = 100;
+
+ for (let i = 1; i < dataPoints; i++) {
+ let change = 0;
+ if (mode === 'stationary') {
+ let pull = (100 - currentPrice) * 0.08;
+ change = pull + (Math.random() - 0.5) * 3;
+ } else if (mode === 'structural-break') {
+ if (i < 60) {
+ let pull = (100 - currentPrice) * 0.08;
+ change = pull + (Math.random() - 0.5) * 3;
+ } else if (i < 100) {
+ change = 1.8 + (Math.random() - 0.2) * 6;
+ } else {
+ change = (Math.random() - 0.5) * 14;
+ }
+ }
+ currentPrice += change;
+ if (currentPrice < 10) currentPrice = 10;
+ rawData.push(currentPrice);
+ labels.push(i.toString());
+ }
+
+ updateCharts();
+
+ document.getElementById('btn-stationary').className = mode === 'stationary' ? 'active' : '';
+ document.getElementById('btn-break').className = mode === 'structural-break' ? 'active' : '';
+ document.getElementById('narrativeText').innerHTML = narratives[mode];
+ }
+
+ function calculateIndicators(data, period) {
+ let sma = [], upper = [], lower = [], bias = [];
+ const k = 2;
+
+ for (let i = 0; i < data.length; i++) {
+ if (i < period - 1) {
+ sma.push(null); upper.push(null); lower.push(null); bias.push(null);
+ continue;
+ }
+ let slice = data.slice(i - period + 1, i + 1);
+ let sum = slice.reduce((a, b) => a + b, 0);
+ let mean = sum / period;
+
+ let variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / period;
+ let stdDev = Math.sqrt(variance);
+
+ sma.push(mean);
+ upper.push(mean + k * stdDev);
+ lower.push(mean - k * stdDev);
+
+ bias.push(((data[i] - mean) / mean) * 100);
+ }
+ return { sma, upper, lower, bias };
+ }
+
+ const horizontalLinePlugin = {
+ id: 'horizontalLine',
+ beforeDraw: (chart) => {
+ if (chart.config.options.plugins.horizontalLine) {
+ const lines = chart.config.options.plugins.horizontalLine;
+ const ctx = chart.ctx;
+ const xAxis = chart.scales.x;
+ const yAxis = chart.scales.y;
+
+ lines.forEach(line => {
+ const y = yAxis.getPixelForValue(line.y);
+ ctx.save();
+ ctx.beginPath();
+ ctx.moveTo(xAxis.left, y);
+ ctx.lineTo(xAxis.right, y);
+ ctx.lineWidth = 1.5;
+ ctx.strokeStyle = line.color;
+ ctx.setLineDash([5, 5]);
+ ctx.stroke();
+ ctx.restore();
+ });
+ }
+ }
+ };
+
+ Chart.register(horizontalLinePlugin);
+
+ function updateCharts() {
+ const period = parseInt(document.getElementById('period').value);
+ document.getElementById('periodVal').innerText = period;
+
+ const ind = calculateIndicators(rawData, period);
+
+ if (mainChart) mainChart.destroy();
+ if (subChart) subChart.destroy();
+
+ const ctxMain = document.getElementById('mainChart').getContext('2d');
+ mainChart = new Chart(ctxMain, {
+ type: 'line',
+ data: {
+ labels: labels,
+ datasets: [
+ {
+ label: '资产价格序列 (Price)',
+ data: rawData,
+ borderColor: '#000000',
+ borderWidth: 1.5,
+ pointRadius: 0,
+ zIndex: 10,
+ tension: 0.1
+ },
+ {
+ label: '滚动均值 (SMA)',
+ data: ind.sma,
+ borderColor: '#888888',
+ borderDash: [5, 5],
+ borderWidth: 1.5,
+ pointRadius: 0,
+ tension: 0.1
+ },
+ {
+ label: '置信区间上界 (+2σ)',
+ data: ind.upper,
+ borderColor: '#4682B4',
+ borderWidth: 1.5,
+ pointRadius: 0,
+ tension: 0.1
+ },
+ {
+ label: '置信区间下界 (-2σ)',
+ data: ind.lower,
+ borderColor: '#4682B4',
+ borderWidth: 1.5,
+ pointRadius: 0,
+ tension: 0.1,
+ fill: '-1',
+ backgroundColor: 'rgba(70, 130, 180, 0.1)'
+ }
+ ]
+ },
+ options: {
+ responsive: true,
+ maintainAspectRatio: false,
+ interaction: { intersect: false, mode: 'index' },
+ scales: {
+ y: { grid: { color: '#f0f0f0' }, ticks: { color: '#333' } },
+ x: { display: false }
+ },
+ plugins: { legend: { labels: { color: '#333', font: { family: '"Times New Roman", SimSun, serif' } } } }
+ }
+ });
+
+ const ctxSub = document.getElementById('subChart').getContext('2d');
+ subChart = new Chart(ctxSub, {
+ type: 'line',
+ data: {
+ labels: labels,
+ datasets: [
+ {
+ label: '乖离率 (BIAS %)',
+ data: ind.bias,
+ borderColor: '#000000',
+ borderWidth: 1.5,
+ pointRadius: 0,
+ fill: false,
+ tension: 0.1
+ }
+ ]
+ },
+ options: {
+ responsive: true,
+ maintainAspectRatio: false,
+ interaction: { intersect: false, mode: 'index' },
+ scales: {
+ y: {
+ grid: { color: '#f0f0f0' },
+ ticks: { color: '#333' },
+ suggestedMin: -15,
+ suggestedMax: 15
+ },
+ x: { grid: { display: false }, ticks: { color: '#333', maxTicksLimit: 10 } }
+ },
+ plugins: {
+ legend: { labels: { color: '#333', font: { family: '"Times New Roman", SimSun, serif' } } },
+ horizontalLine: [
+ { y: 10, color: 'rgba(255, 0, 0, 0.6)' },
+ { y: -10, color: 'rgba(255, 0, 0, 0.6)' },
+ { y: 0, color: 'rgba(0, 0, 0, 0.3)' }
+ ]
+ }
+ }
+ });
+ }
+
+ document.getElementById('period').oninput = updateCharts;
+ generateData('stationary');
+</script>
+</body>
+</html>

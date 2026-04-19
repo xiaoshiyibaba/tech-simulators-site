@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>宏观流动性传导时钟沙盘</title>
+ <script src="https://d3js.org/d3.v7.min.js"></script>
+ <style>
+ :root {
+ --bg-color: #1e1e1e;
+ --panel-bg: #2d2d2d;
+ --text-main: #e0e0e0;
+ --text-muted: #888;
+ --accent-blue: #4fc3f7;
+ --accent-green: #81c784;
+ --accent-red: #e57373;
+ --accent-yellow: #fff176;
+ }
+
+ body {
+ background-color: var(--bg-color);
+ color: var(--text-main);
+ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+ margin: 0;
+ padding: 20px;
+ box-sizing: border-box;
+ }
+
+ .container {
+ max-width: 800px;
+ margin: 0 auto;
+ }
+
+ .control-panel {
+ background-color: var(--panel-bg);
+ padding: 20px;
+ border-radius: 8px;
+ margin-bottom: 20px;
+ box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+ border: 1px solid #3a3a3a;
+ }
+
+ h3 { margin-top: 0; color: var(--accent-blue); font-size: 1.2rem; }
+
+ #phase-desc {
+ font-size: 0.95rem;
+ line-height: 1.6;
+ color: #ccc;
+ margin-bottom: 0;
+ min-height: 45px;
+ }
+
+ .slider-wrapper { margin-top: 20px; }
+
+ input[type=range] {
+ width: 100%;
+ cursor: pointer;
+ accent-color: var(--accent-blue);
+ }
+
+ .slider-labels {
+ display: flex;
+ justify-content: space-between;
+ font-size: 0.8rem;
+ color: var(--text-muted);
+ margin-top: 8px;
+ padding: 0 5px;
+ }
+
+ svg {
+ background-color: var(--panel-bg);
+ border-radius: 8px;
+ border: 1px solid #3a3a3a;
+ width: 100%;
+ height: auto;
+ display: block;
+ }
+
+ /* D3 SVG 样式 */
+ .node rect { fill: #252525; stroke: #555; stroke-width: 2px; rx: 8px; }
+ .node text.title { fill: #fff; font-size: 16px; font-weight: bold; }
+ .node text.state { font-size: 14px; font-weight: normal; }
+ .link { fill: none; stroke-linecap: round; transition: stroke-width 0.1s, stroke-opacity 0.1s; }
+
+ /* 连线颜色 */
+ .link-bond { stroke: var(--accent-green); }
+ .link-stock { stroke: var(--accent-red); }
+ .link-real { stroke: var(--accent-yellow); }
+ </style>
+</head>
+<body>
+
+<div class="container">
+ <div class="control-panel">
+ <h3 id="phase-title">1. 衰退初期：债市狂欢</h3>
+ <p id="phase-desc">先行指标：社融率先掉头向下。实体不借钱，【M2 > 社融】剪刀差扩大。资金滞留金融体系形成资产荒，疯狂涌入债市压低利率。股市因基本面下滑而杀跌。</p>
+
+ <div class="slider-wrapper">
+ <input type="range" id="time-slider" min="1" max="3" step="0.01" value="1">
+ <div class="slider-labels">
+ <span>衰退初期 (紧信用)</span>
+ <span>深度衰退 (宽货币)</span>
+ <span>复苏初期 (宽信用)</span>
+ </div>
+ </div>
+ </div>
+
+ <div id="svg-container"></div>
+</div>
+
+<script>
+ // --- 1. 初始化设置 ---
+ const width = 800;
+ const height = 400;
+ const svg = d3.select("#svg-container")
+ .append("svg")
+ .attr("viewBox", `0 0 ${width} ${height}`);
+
+ // 定义箭头标记
+ svg.append("defs").selectAll("marker")
+ .data(["bond", "stock", "real"])
+ .enter().append("marker")
+ .attr("id", d => `arrow-${d}`)
+ .attr("viewBox", "0 -5 10 10")
+ .attr("refX", 8)
+ .attr("refY", 0)
+ .attr("markerWidth", 6)
+ .attr("markerHeight", 6)
+ .attr("orient", "auto")
+ .append("path")
+ .attr("d", "M0,-5L10,0L0,5")
+ .attr("fill", d => {
+ if(d==="bond") return "#81c784";
+ if(d==="stock") return "#e57373";
+ return "#fff176";
+ });
+
+ // --- 2. 定义节点数据 ---
+ // x, y 为中心坐标
+ const nodes = [
+ { id: "bank", x: 150, y: 200, title: "🏦 银行体系 (M2供给)", state: "资金池爆满", color: "#4fc3f7" },
+ { id: "bond", x: 450, y: 80, title: "📜 债券市场 (无风险利率)", state: "长牛 (利率下行)", color: "#81c784" },
+ { id: "stock", x: 450, y: 320, title: "📈 股票市场 (风险溢价)", state: "杀跌 (EPS下滑)", color: "#e57373" },
+ { id: "real", x: 650, y: 200, title: "🏭 实体经济 (社融/GDP)", state: "需求萎缩 (紧信用)", color: "#fff176" }
+ ];
+
+ // --- 3. 绘制节点 ---
+ const nodeGroups = svg.selectAll(".node")
+ .data(nodes)
+ .enter().append("g")
+ .attr("class", "node")
+ .attr("transform", d => `translate(${d.x},${d.y})`);
+
+ const rectWidth = 180;
+ const rectHeight = 60;
+
+ nodeGroups.append("rect")
+ .attr("x", -rectWidth/2)
+ .attr("y", -rectHeight/2)
+ .attr("width", rectWidth)
+ .attr("height", rectHeight);
+
+ nodeGroups.append("text")
+ .attr("class", "title")
+ .attr("y", -5)
+ .attr("text-anchor", "middle")
+ .text(d => d.title);
+
+ nodeGroups.append("text")
+ .attr("class", "state")
+ .attr("id", d => `state-${d.id}`)
+ .attr("y", 18)
+ .attr("text-anchor", "middle")
+ .attr("fill", d => d.color)
+ .text(d => d.state);
+
+ // --- 4. 绘制动态连线 (贝塞尔曲线) ---
+ // 定义路径生成器
+ const linkGenerator = d3.linkHorizontal()
+ .x(d => d[0])
+ .y(d => d[1]);
+
+ // 计算边缘连接点
+ const getEdge = (source, target) => {
+ let sx = source.x + (target.x > source.x ? rectWidth/2 : -rectWidth/2);
+ let sy = source.y;
+ let tx = target.x - rectWidth/2 - 15; // 减去箭头长度
+ let ty = target.y;
+ return {source: [sx, sy], target: [tx, ty]};
+ };
+
+ // 绘制连线
+ const linkBond = svg.append("path")
+ .attr("class", "link link-bond")
+ .attr("marker-end", "url(#arrow-bond)")
+ .attr("d", linkGenerator(getEdge(nodes[0], nodes[1])));
+
+ const linkStock = svg.append("path")
+ .attr("class", "link link-stock")
+ .attr("marker-end", "url(#arrow-stock)")
+ .attr("d", linkGenerator(getEdge(nodes[0], nodes[2])));
+
+ const linkReal = svg.append("path")
+ .attr("class", "link link-real")
+ .attr("marker-end", "url(#arrow-real)")
+ .attr("d", linkGenerator(getEdge(nodes[0], nodes[3])));
+
+ // --- 5. 核心逻辑：根据滑块更新状态 ---
+ const slider = document.getElementById("time-slider");
+ const phaseTitle = document.getElementById("phase-title");
+ const phaseDesc = document.getElementById("phase-desc");
+
+ function updateSimulation(value) {
+ const t = parseFloat(value);
+
+ // 连线宽度与透明度变量
+ let wBond, wStock, wReal;
+ let oBond = 1, oStock = 1, oReal = 1;
+
+ // 状态文本变量
+ let titleText, descText;
+ let sBond, sStock, sReal;
+
+ // [阶段1] 1.0 - 1.6: 衰退初期
+ if (t < 1.6) {
+ titleText = "1. 衰退初期：债市狂欢";
+ descText = "先行指标：社融率先掉头向下。实体不借钱，【M2 > 社融】剪刀差扩大。资金滞留金融体系形成资产荒，疯狂涌入债市压低无风险利率。股市因基本面下滑而杀跌。";
+
+ wBond = 12 - (t - 1) * 8; // 资金主要流向债市
+ wStock = 2; // 股市失血
+ wReal = 2; // 实体极度缺水
+
+ sBond = "长牛 (利率下行)";
+ sStock = "杀跌 (EPS下滑)";
+ sReal = "需求萎缩 (紧信用)";
+ }
+ // [阶段2] 1.6 - 2.4: 深度衰退
+ else if (t < 2.4) {
+ titleText = "2. 深度衰退：股市水牛/拔估值";
+ descText = "滞后指标：名义GDP断崖下跌。实体需求冰点，【M2 > 名义GDP】剪刀差转正。全社会闲钱极度充裕，长债收益率太低，资金被迫下沉溢出到股市，追逐高股息与红利确定性。";
+
+ let peakFactor = 1 - Math.abs(t - 2) * 2; // t=2 时达到巅峰 1
+ wBond = 4;
+ wStock = 4 + peakFactor * 8; // 资金大幅涌入股市分母端
+ wReal = 1; // 实体依然冰点
+
+ sBond = "寻底 (极度拥挤)";
+ sStock = "水牛/红利牛 (流动性驱动)";
+ sReal = "冰点 (GDP触底)";
+ }
+ // [阶段3] 2.4 - 3.0: 复苏初期
+ else {
+ titleText = "3. 复苏初期：重回基本面";
+ descText = "确认指标：社融触底反弹。宽货币终于起效，实体开始借钱扩张信用。资金从金融系统抽离，真实流入实体经济。债市因缺水而转熊，股市驱动力重回业绩主线。";
+
+ wBond = Math.max(1, 4 - (t - 2.4) * 8); // 债市被抽水
+ wStock = 6; // 股市保持温和
+ wReal = 2 + (t - 2.4) * 15; // 实体疯狂吸水
+
+ sBond = "熊市 (利率反弹)";
+ sStock = "业绩牛/顺周期 (盈利驱动)";
+ sReal = "信用扩张 (宽信用)";
+ }
+
+ // 更新 UI 文本
+ phaseTitle.innerText = titleText;
+ phaseDesc.innerText = descText;
+ d3.select("#state-bond").text(sBond);
+ d3.select("#state-stock").text(sStock);
+ d3.select("#state-real").text(sReal);
+
+ // 更新连线动画
+ linkBond.attr("stroke-width", wBond).attr("stroke-opacity", wBond < 2 ? 0.3 : 1);
+ linkStock.attr("stroke-width", wStock).attr("stroke-opacity", wStock < 2 ? 0.3 : 1);
+ linkReal.attr("stroke-width", wReal).attr("stroke-opacity", wReal < 2 ? 0.3 : 1);
+ }
+
+ // 绑定事件并初始化
+ slider.addEventListener("input", (e) => updateSimulation(e.target.value));
+ updateSimulation(slider.value);
+
+</script>
+</body>
+</html>
